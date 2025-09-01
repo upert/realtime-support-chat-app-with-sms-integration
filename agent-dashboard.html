@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #f4f6f9;
+        }
+        .conversation-item.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .conversation-item.active .group-badge {
+            background-color: white !important;
+            color: #3b82f6 !important;
+        }
+        .message {
+            max-width: 75%;
+        }
+        .group-toggle {
+            transition: all 0.2s ease-in-out;
+        }
+        .group-toggle.active {
+            background-color: #2563eb;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="flex h-screen">
+        <!-- Left Column: Conversation List -->
+        <aside class="w-1/3 bg-white border-r border-gray-200 flex flex-col">
+            <header class="p-4 border-b border-gray-200">
+                <h1 class="text-2xl font-bold text-gray-700">Agent Dashboard</h1>
+                <p id="connection-status" class="text-sm text-red-500 font-semibold">Connecting...</p>
+                <div class="mt-2">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase mb-2">My Queues</h3>
+                    <div id="group-toggles" class="flex flex-wrap gap-2">
+                        <button data-group="general" class="group-toggle text-sm font-semibold px-3 py-1 rounded-full bg-gray-200 text-gray-700">General Support</button>
+                        <button data-group="fido" class="group-toggle text-sm font-semibold px-3 py-1 rounded-full bg-gray-200 text-gray-700">Fido Based</button>
+                        <button data-group="insurance" class="group-toggle text-sm font-semibold px-3 py-1 rounded-full bg-gray-200 text-gray-700">Insurance</button>
+                    </div>
+                </div>
+            </header>
+            <div class="flex-1 overflow-y-auto">
+                <h2 class="p-4 text-lg font-semibold text-gray-600">Incoming Chats</h2>
+                <div id="conversation-list">
+                    <!-- Conversations will be dynamically added here -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Column: Active Chat Window -->
+        <main class="w-2/3 flex flex-col">
+            <div id="active-chat-window" class="flex-1 flex flex-col justify-center items-center text-gray-500">
+                <p>Select a conversation to begin.</p>
+            </div>
+            <div id="chat-input-area" class="p-4 bg-white border-t border-gray-200 hidden">
+                <div class="flex space-x-3">
+                    <input type="text" id="chat-input-field" placeholder="Type your response..." class="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="send-message-btn" class="bg-blue-500 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-600">Send</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const conversationList = document.getElementById('conversation-list');
+            const activeChatWindow = document.getElementById('active-chat-window');
+            const chatInputArea = document.getElementById('chat-input-area');
+            const chatInputField = document.getElementById('chat-input-field');
+            const sendMessageBtn = document.getElementById('send-message-btn');
+            const connectionStatus = document.getElementById('connection-status');
+            const groupToggles = document.querySelectorAll('.group-toggle');
+
+            let activeConversationId = null;
+            const conversations = {};
+
+            const socket = io("http://localhost:3000");
+
+            socket.on('connect', () => {
+                console.log('Agent dashboard connected to server with ID:', socket.id);
+                connectionStatus.textContent = 'Connected';
+                connectionStatus.classList.remove('text-red-500');
+                connectionStatus.classList.add('text-green-500');
+                socket.emit('agent_connect', { agentId: 'agent_' + socket.id });
+
+                // By default, subscribe to all groups on connection
+                groupToggles.forEach(toggle => toggle.classList.add('active'));
+                sendSubscriptionUpdate();
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Agent dashboard disconnected from server.');
+                connectionStatus.textContent = 'Disconnected';
+                connectionStatus.classList.remove('text-green-500');
+                connectionStatus.classList.add('text-red-500');
+            });
+
+            socket.on('new_conversation_queued', (data) => {
+                console.log('New conversation received:', data);
+                if (!conversations[data.conversationId]) {
+                    conversations[data.conversationId] = {
+                        id: data.conversationId,
+                        initialMessage: data.text,
+                        groupName: data.groupName,
+                        messages: [{ sender: 'customer', text: data.text }]
+                    };
+                    renderConversationList();
+                }
+            });
+            
+            socket.on('message_from_customer', (data) => {
+                if (conversations[data.conversationId]) {
+                    conversations[data.conversationId].messages.push({ sender: 'customer', text: data.text });
+                    if (data.conversationId === activeConversationId) {
+                        renderActiveChat();
+                    }
+                }
+            });
+
+            // Add event listeners to group toggle buttons
+            groupToggles.forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    toggle.classList.toggle('active');
+                    sendSubscriptionUpdate();
+                });
+            });
+
+            function sendSubscriptionUpdate() {
+                const activeGroups = Array.from(document.querySelectorAll('.group-toggle.active'))
+                                          .map(toggle => toggle.dataset.group);
+                socket.emit('agent_update_subscriptions', activeGroups);
+                console.log('Updated subscriptions:', activeGroups);
+            }
+
+            function renderConversationList() {
+                conversationList.innerHTML = '';
+                for (const convId in conversations) {
+                    const conv = conversations[convId];
+                    const item = document.createElement('div');
+                    item.className = 'conversation-item p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-100';
+                    item.dataset.convId = conv.id;
+                    
+                    let badgeColor = 'bg-gray-100 text-gray-800';
+                    if (conv.groupName === 'General Support') badgeColor = 'bg-blue-100 text-blue-800';
+                    if (conv.groupName === 'Fido Based') badgeColor = 'bg-green-100 text-green-800';
+                    if (conv.groupName === 'Insurance') badgeColor = 'bg-purple-100 text-purple-800';
+                    
+                    item.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <p class="font-semibold">${conv.id}</p>
+                            <span class="group-badge text-xs font-semibold px-2 py-1 rounded-full ${badgeColor}">${conv.groupName}</span>
+                        </div>
+                        <p class="text-sm text-gray-500 truncate mt-1">${conv.initialMessage}</p>
+                    `;
+                    if (conv.id === activeConversationId) {
+                        item.classList.add('active');
+                    }
+                    item.addEventListener('click', () => selectConversation(conv.id));
+                    conversationList.appendChild(item);
+                }
+            }
+
+            function selectConversation(convId) {
+                activeConversationId = convId;
+                renderConversationList();
+                renderActiveChat();
+                chatInputArea.classList.remove('hidden');
+            }
+
+            function renderActiveChat() {
+                const conv = conversations[activeConversationId];
+                if (!conv) return;
+
+                activeChatWindow.innerHTML = `
+                    <header class="w-full p-4 border-b border-gray-200 bg-white flex justify-between items-center">
+                        <h2 class="font-bold text-lg">${conv.id}</h2>
+                        <span class="text-sm font-semibold">${conv.groupName}</span>
+                    </header>
+                    <div id="message-list" class="flex-1 w-full p-4 overflow-y-auto">
+                    </div>
+                `;
+
+                const messageList = document.getElementById('message-list');
+                conv.messages.forEach(msg => {
+                    const messageEl = document.createElement('div');
+                    messageEl.className = `message flex mb-4 ${msg.sender === 'agent' ? 'justify-end' : 'justify-start'}`;
+                    messageEl.innerHTML = `
+                        <div class="p-3 rounded-lg ${msg.sender === 'agent' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-800'}">
+                            <p>${msg.text}</p>
+                        </div>
+                    `;
+                    messageList.appendChild(messageEl);
+                });
+                messageList.scrollTop = messageList.scrollHeight;
+            }
+
+            function sendAgentMessage() {
+                const text = chatInputField.value.trim();
+                if (text && activeConversationId) {
+                    const messageData = {
+                        conversationId: activeConversationId,
+                        text: text,
+                        sender: 'agent'
+                    };
+                    
+                    socket.emit('message_from_agent', messageData);
+
+                    conversations[activeConversationId].messages.push(messageData);
+                    renderActiveChat();
+                    chatInputField.value = '';
+                }
+            }
+
+            sendMessageBtn.addEventListener('click', sendAgentMessage);
+            chatInputField.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    sendAgentMessage();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

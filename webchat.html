@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webchat Feature</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #F8F5F2; /* Light cream background */
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+        }
+        #chat-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #4A3F35; /* Dark Brown */
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            z-index: 1001;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.2s ease-in-out;
+        }
+        #chat-button:hover {
+            transform: scale(1.1);
+        }
+        #chat-widget {
+            position: fixed;
+            bottom: 90px;
+            right: 20px;
+            width: 360px;
+            max-width: calc(100% - 40px);
+            height: 550px;
+            background: #fff;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            visibility: hidden;
+        }
+        #chat-widget.open {
+            opacity: 1;
+            transform: translateY(0);
+            visibility: visible;
+        }
+        .chat-header {
+            background: #4A3F35; /* Dark Brown */
+            color: #fff;
+            padding: 1rem;
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
+            text-align: center;
+        }
+        .chat-header h3 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-family: 'Montserrat', sans-serif;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            background-color: #F8F5F2;
+        }
+        .message {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .message.bot { align-items: flex-start; }
+        .message.user { align-items: flex-end; }
+        .message p {
+            padding: 0.75rem 1rem;
+            border-radius: 18px;
+            display: inline-block;
+            max-width: 85%;
+            line-height: 1.4;
+        }
+        .message.bot p {
+            background: #EAE0D5;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+        .message.user p {
+            background: #8E7962;
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        .quick-replies {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            justify-content: flex-start;
+        }
+        .quick-replies button {
+            background: #fff;
+            border: 1px solid #8E7962;
+            color: #4A3F35;
+            padding: 0.5rem 0.75rem;
+            border-radius: 18px;
+            cursor: pointer;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .quick-replies button:hover {
+            background-color: #8E7962;
+            color: #fff;
+        }
+        .quick-replies button:disabled {
+            background-color: #EAE0D5;
+            border-color: #EAE0D5;
+            color: #999;
+            cursor: not-allowed;
+        }
+        .chat-input {
+            display: flex;
+            padding: 0.75rem;
+            border-top: 1px solid #ddd;
+            background: #fff;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+        }
+        .chat-input input {
+            flex-grow: 1;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            padding: 0.75rem;
+            font-size: 1rem;
+        }
+        .chat-input button {
+            background: #4A3F35;
+            color: #fff;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-left: 0.5rem;
+            cursor: pointer;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-2xl">
+            <div class="text-center mb-12">
+                <h1 class="text-4xl font-bold mb-4">Contact Us</h1>
+                <p class="text-lg text-gray-600">Have a question? Fill out the form below or use the chat in the corner.</p>
+            </div>
+
+            <section class="bg-white p-8 rounded-xl shadow-lg">
+                <form id="contact-form">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="name" class="block text-sm font-semibold text-gray-700">Name</label>
+                            <input type="text" id="name" name="name" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8E7962] focus:border-[#8E7962]">
+                        </div>
+                        <div>
+                            <label for="phone" class="block text-sm font-semibold text-gray-700">Phone Number</label>
+                            <input type="tel" id="phone" name="phone" class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8E7962] focus:border-[#8E7962]">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="email" class="block text-sm font-semibold text-gray-700">Email Address</label>
+                            <input type="email" id="email" name="email" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8E7962] focus:border-[#8E7962]">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="subject" class="block text-sm font-semibold text-gray-700">Subject</label>
+                            <input type="text" id="subject" name="subject" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8E7962] focus:border-[#8E7962]">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="message" class="block text-sm font-semibold text-gray-700">Message</label>
+                            <textarea id="message" name="message" rows="5" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8E7962] focus:border-[#8E7962]"></textarea>
+                        </div>
+                    </div>
+                    <div class="mt-8 text-right">
+                        <button type="submit" class="w-full md:w-auto inline-flex justify-center items-center px-8 py-3 border border-transparent text-base font-semibold rounded-lg shadow-sm text-white bg-[#4A3F35] hover:bg-[#3a322a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4A3F35]">
+                            Send Message
+                        </button>
+                    </div>
+                </form>
+                <div id="form-status" class="mt-6 text-center text-lg font-semibold"></div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Webchat Feature -->
+    <div id="chat-widget">
+        <div class="chat-header">
+            <h3>Support Chat</h3>
+        </div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input">
+            <input type="text" id="chat-input-field" placeholder="Type a message...">
+            <button id="send-message-btn" aria-label="Send Message">&#10148;</button>
+        </div>
+    </div>
+    <button id="chat-button" aria-label="Open Chat">💬</button>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Chat Widget Logic ---
+            const chatButton = document.getElementById('chat-button');
+            const chatWidget = document.getElementById('chat-widget');
+            const chatMessages = document.getElementById('chat-messages');
+            const chatInputField = document.getElementById('chat-input-field');
+            const sendMessageBtn = document.getElementById('send-message-btn');
+            
+            let conversationStarted = false;
+            let conversationId = null; 
+            let socket = null;
+
+            chatButton.addEventListener('click', () => {
+                chatWidget.classList.toggle('open');
+                if (chatWidget.classList.contains('open') && !conversationStarted) {
+                    startConversation();
+                    conversationStarted = true;
+                }
+            });
+
+            function connectToServer() {
+                socket = io("http://localhost:3000");
+                socket.on('connect', () => {
+                    console.log('Successfully connected to the server with ID:', socket.id);
+                    conversationId = 'conv_' + Date.now(); 
+                    socket.emit('start_conversation', { conversationId: conversationId });
+                });
+                socket.on('new_message', (data) => {
+                    if (data.conversationId === conversationId) {
+                        addResponseMessage(data.text);
+                    }
+                });
+                socket.on('disconnect', () => console.log('Disconnected from the server.'));
+            }
+
+            function startConversation() {
+                connectToServer();
+                addResponseMessage(
+                    "Please choose your query from the below:",
+                    [
+                        { text: "General Support", value: "general" },
+                        { text: "Fido Based", value: "fido" },
+                        { text: "Insurance", value: "insurance" }
+                    ]
+                );
+            }
+
+            function addResponseMessage(text, replies = []) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message bot';
+                const messageP = document.createElement('p');
+                messageP.textContent = text;
+                messageDiv.appendChild(messageP);
+
+                if (replies.length > 0) {
+                    const repliesDiv = document.createElement('div');
+                    repliesDiv.className = 'quick-replies';
+                    replies.forEach(reply => {
+                        const button = document.createElement('button');
+                        button.textContent = reply.text;
+                        button.dataset.value = reply.value;
+                        button.addEventListener('click', handleQuickReply, { once: true });
+                        repliesDiv.appendChild(button);
+                    });
+                    messageDiv.appendChild(repliesDiv);
+                }
+                chatMessages.appendChild(messageDiv);
+                scrollToBottom();
+            }
+
+            function addUserMessage(text) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message user';
+                const messageP = document.createElement('p');
+                messageP.textContent = text;
+                messageDiv.appendChild(messageP);
+                chatMessages.appendChild(messageDiv);
+                scrollToBottom();
+            }
+
+            function handleQuickReply(e) {
+                const choiceText = e.target.textContent;
+                const choiceValue = e.target.dataset.value;
+                addUserMessage(choiceText);
+                socket.emit('quick_reply_selected', {
+                    conversationId: conversationId,
+                    value: choiceValue,
+                    text: choiceText
+                });
+                e.target.parentElement.querySelectorAll('button').forEach(btn => {
+                    btn.disabled = true;
+                });
+            }
+
+            function sendTypedMessage() {
+                const messageText = chatInputField.value.trim();
+                if (messageText && socket) {
+                    addUserMessage(messageText);
+                    socket.emit('new_message', {
+                        conversationId: conversationId,
+                        text: messageText,
+                        sender: 'customer'
+                    });
+                    chatInputField.value = '';
+                }
+            }
+            sendMessageBtn.addEventListener('click', sendTypedMessage);
+            chatInputField.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendTypedMessage();
+            });
+            function scrollToBottom() {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+
+            // --- Contact Form Submission Logic ---
+            const contactForm = document.getElementById('contact-form');
+            const formStatus = document.getElementById('form-status');
+
+            contactForm.addEventListener('submit', async (event) => {
+                event.preventDefault(); // Prevent the default page reload
+                
+                const formData = new FormData(contactForm);
+                const data = Object.fromEntries(formData.entries());
+
+                try {
+                    const response = await fetch('http://localhost:3000/api/contact', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data),
+                    });
+
+                    if (response.ok) {
+                        formStatus.textContent = 'Thank you! Your message has been sent.';
+                        formStatus.className = 'mt-6 text-center text-lg font-semibold text-green-600';
+                        contactForm.reset();
+                    } else {
+                        throw new Error('Something went wrong on the server.');
+                    }
+                } catch (error) {
+                    formStatus.textContent = 'Sorry, there was an error sending your message. Please try again later.';
+                    formStatus.className = 'mt-6 text-center text-lg font-semibold text-red-600';
+                    console.error('Form submission error:', error);
+                }
+
+                // Hide the status message after 5 seconds
+                setTimeout(() => {
+                    formStatus.textContent = '';
+                }, 5000);
+            });
+        });
+    </script>
+</body>
+</html>
