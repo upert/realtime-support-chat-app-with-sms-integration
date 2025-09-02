@@ -55,8 +55,8 @@ app.post('/api/contact', async (req, res) => { // <-- Changed to async to handle
         messages: [
             {
                 destinations: [{ to: phone }],
-                from: "Fido Credit", // This can be your registered Sender ID
-                text: `Hello ${name}, we have received your message regarding "${subject}". Our team in Accra will get back to you shortly.`
+                from: "Starlight Support Suite", // This can be your registered Sender ID
+                text: `Hello ${name}, we have received your message regarding "${subject}". Our team will get back to you shortly.`
             }
         ]
     };
