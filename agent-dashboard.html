@@ -47,7 +47,7 @@
                     <h3 class="text-xs font-bold text-gray-500 uppercase mb-2">My Queues</h3>
                     <div id="group-toggles" class="flex flex-wrap gap-2">
                         <button data-group="general" class="group-toggle text-sm font-semibold px-3 py-1 rounded-full bg-gray-200 text-gray-700">General Support</button>
-                        <button data-group="fido" class="group-toggle text-sm font-semibold px-3 py-1 rounded-full bg-gray-200 text-gray-700">Fido Based</button>
+                        <button data-group="Business" class="group-toggle text-sm font-semibold px-3 py-1 rounded-full bg-gray-200 text-gray-700">Business</button>
                         <button data-group="insurance" class="group-toggle text-sm font-semibold px-3 py-1 rounded-full bg-gray-200 text-gray-700">Insurance</button>
                     </div>
                 </div>
@@ -155,7 +155,7 @@
                     
                     let badgeColor = 'bg-gray-100 text-gray-800';
                     if (conv.groupName === 'General Support') badgeColor = 'bg-blue-100 text-blue-800';
-                    if (conv.groupName === 'Fido Based') badgeColor = 'bg-green-100 text-green-800';
+                    if (conv.groupName === 'Business') badgeColor = 'bg-green-100 text-green-800';
                     if (conv.groupName === 'Insurance') badgeColor = 'bg-purple-100 text-purple-800';
                     
                     item.innerHTML = `
