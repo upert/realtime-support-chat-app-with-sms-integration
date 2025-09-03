@@ -26,7 +26,7 @@ const PORT = 3000;
 // --- In-memory storage ---
 const supportGroups = {
   'general': { name: 'General Support', members: new Set() },
-  'fido': { name: 'Fido Based', members: new Set() },
+  'Business': { name: 'Business', members: new Set() },
   'insurance': { name: 'Insurance', members: new Set() }
 };
 const connectedAgents = {}; 
