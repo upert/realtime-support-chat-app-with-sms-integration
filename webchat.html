@@ -181,6 +181,8 @@
                         <div>
                             <label for="phone" class="block text-sm font-semibold text-gray-700">Phone Number</label>
                             <input type="tel" id="phone" name="phone" class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8E7962] focus:border-[#8E7962]">
+                            <!-- MODIFICATION: Note for phone number format -->
+                            <p class="text-xs text-gray-500 mt-1">Please include country code (e.g., 233241234567 for Ghana).</p>
                         </div>
                         <div class="md:col-span-2">
                             <label for="email" class="block text-sm font-semibold text-gray-700">Email Address</label>
@@ -195,8 +197,16 @@
                             <textarea id="message" name="message" rows="5" required class="mt-1 block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-[#8E7962] focus:border-[#8E7962]"></textarea>
                         </div>
                     </div>
+
+                    <!-- MODIFICATION: SMS Consent Checkbox -->
+                    <div class="mt-6 flex items-start space-x-3">
+                        <input id="sms-consent" name="sms-consent" type="checkbox" class="h-4 w-4 mt-1 text-[#4A3F35] focus:ring-[#8E7962] border-gray-300 rounded">
+                        <label for="sms-consent" class="text-sm text-gray-600">I consent to receive an SMS confirmation for this submission. Message and data rates may apply.</label>
+                    </div>
+
                     <div class="mt-8 text-right">
-                        <button type="submit" class="w-full md:w-auto inline-flex justify-center items-center px-8 py-3 border border-transparent text-base font-semibold rounded-lg shadow-sm text-white bg-[#4A3F35] hover:bg-[#3a322a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4A3F35]">
+                        <!-- MODIFICATION: Added disabled attribute -->
+                        <button type="submit" id="submit-form-btn" class="w-full md:w-auto inline-flex justify-center items-center px-8 py-3 border border-transparent text-base font-semibold rounded-lg shadow-sm text-white bg-[#4A3F35] hover:bg-[#3a322a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4A3F35] disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors">
                             Send Message
                         </button>
                     </div>
@@ -261,7 +271,7 @@
                     "Please choose your query from the below:",
                     [
                         { text: "General Support", value: "general" },
-                        { text: "Fido Based", value: "fido" },
+                        { text: "Business", value: "Business" },
                         { text: "Insurance", value: "insurance" }
                     ]
                 );
@@ -337,9 +347,29 @@
             // --- Contact Form Submission Logic ---
             const contactForm = document.getElementById('contact-form');
             const formStatus = document.getElementById('form-status');
+            const submitBtn = document.getElementById('submit-form-btn');
+            const smsConsentCheckbox = document.getElementById('sms-consent');
+
+            // MODIFICATION: Disable submit button initially
+            submitBtn.disabled = true;
+
+            // MODIFICATION: Add event listener to checkbox to enable/disable button
+            smsConsentCheckbox.addEventListener('change', () => {
+                submitBtn.disabled = !smsConsentCheckbox.checked;
+            });
 
             contactForm.addEventListener('submit', async (event) => {
-                event.preventDefault(); // Prevent the default page reload
+                event.preventDefault();
+                
+                // MODIFICATION: Double check consent before sending
+                if (!smsConsentCheckbox.checked) {
+                    formStatus.textContent = 'Please consent to SMS confirmation to continue.';
+                    formStatus.className = 'mt-6 text-center text-lg font-semibold text-red-600';
+                    return;
+                }
+
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Sending...';
                 
                 const formData = new FormData(contactForm);
                 const data = Object.fromEntries(formData.entries());
@@ -347,9 +377,7 @@
                 try {
                     const response = await fetch('http://localhost:3000/api/contact', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data),
                     });
 
@@ -357,21 +385,26 @@
                         formStatus.textContent = 'Thank you! Your message has been sent.';
                         formStatus.className = 'mt-6 text-center text-lg font-semibold text-green-600';
                         contactForm.reset();
+                        // Button remains disabled because the form is reset and checkbox is unchecked
                     } else {
                         throw new Error('Something went wrong on the server.');
                     }
                 } catch (error) {
-                    formStatus.textContent = 'Sorry, there was an error sending your message. Please try again later.';
+                    formStatus.textContent = 'Sorry, there was an error. Please try again later.';
                     formStatus.className = 'mt-6 text-center text-lg font-semibold text-red-600';
                     console.error('Form submission error:', error);
+                    // Re-enable button on error, only if checkbox is still checked
+                    submitBtn.disabled = !smsConsentCheckbox.checked;
+                } finally {
+                    submitBtn.textContent = 'Send Message';
+                    // Hide the status message after 5 seconds
+                    setTimeout(() => {
+                        formStatus.textContent = '';
+                    }, 5000);
                 }
-
-                // Hide the status message after 5 seconds
-                setTimeout(() => {
-                    formStatus.textContent = '';
-                }, 5000);
             });
         });
     </script>
 </body>
 </html>
+
